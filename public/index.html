@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor da Hashtag</title>
+<style>
+  :root {
+    --fundo: #f6f7f9; --cartao: #ffffff; --texto: #14181f; --suave: #5b6573; --linha: #e3e6eb;
+    --destaque: #1f5eff; --ok: #0f8a4b; --alerta: #b7791f; --erro: #c53030;
+    --x: #20242c; --tiktok: #00a6a6; --instagram: #d6336c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tema="claro"]) {
+      --fundo: #0e1116; --cartao: #171b22; --texto: #eef1f5; --suave: #9aa5b4; --linha: #2a313c;
+      --destaque: #6b95ff; --ok: #3ecf8e; --alerta: #e0a93b; --erro: #f26b6b;
+      --x: #e6e9ee; --tiktok: #2dd4d4; --instagram: #f472a8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; }
+  .sub { color: var(--suave); font-size: 13px; }
+  button, select, input { font: inherit; color: inherit; background: var(--cartao); border: 1px solid var(--linha); border-radius: 8px; padding: 8px 12px; }
+  button { cursor: pointer; }
+  button.principal { background: var(--destaque); border-color: var(--destaque); color: #fff; }
+  button:disabled { opacity: .6; cursor: default; }
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--destaque); outline-offset: 2px; }
+  .acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cartao { background: var(--cartao); border: 1px solid var(--linha); border-radius: 12px; padding: 16px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .kpi .valor { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .nome { color: var(--suave); font-size: 13px; }
+  .kpi .delta { font-size: 12px; color: var(--suave); }
+  .filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .filtros input { flex: 1; min-width: 160px; }
+  .redes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .rede h3 { margin: 0 0 4px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--suave); display: inline-block; }
+  .ponto.ok { background: var(--ok); } .ponto.erro { background: var(--erro); } .ponto.limite { background: var(--alerta); }
+  .rede .numeros { font-size: 13px; color: var(--suave); }
+  .rede .cob { font-size: 12px; color: var(--suave); margin-top: 6px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  section { margin-bottom: 12px; }
+  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 800px) { .duas { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--linha); vertical-align: top; }
+  th { color: var(--suave); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .etiqueta { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--linha); color: var(--suave); white-space: nowrap; }
+  .texto { color: var(--suave); max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  a { color: var(--destaque); }
+  .rolagem { overflow-x: auto; }
+  .vazio { color: var(--suave); padding: 24px 0; text-align: center; }
+  .legenda { display: flex; gap: 14px; font-size: 12px; color: var(--suave); margin-top: 6px; flex-wrap: wrap; }
+  .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+  #aviso { display: none; background: var(--cartao); border: 1px solid var(--alerta); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Monitor da Hashtag</h1>
+      <div class="sub" id="termos">Carregando…</div>
+    </div>
+    <div class="acoes">
+      <button id="atualizar" class="principal">Atualizar agora</button>
+      <a href="/api/posts.csv" id="csv"><button type="button">Baixar planilha</button></a>
+    </div>
+  </header>
+
+  <div id="aviso" role="status"></div>
+  <div class="sub" id="estado" style="margin-bottom:12px"></div>
+
+  <div class="filtros">
+    <select id="rede" aria-label="Rede"><option value="">Todas as redes</option><option value="x">X</option><option value="tiktok">TikTok</option><option value="instagram">Instagram</option></select>
+    <select id="video" aria-label="Vídeo"><option value="">Vídeo e não vídeo</option><option value="sim">Só vídeos</option><option value="nao">Sem vídeo</option></select>
+    <select id="match" aria-label="Tipo"><option value="">Hashtag ou frase</option><option value="hashtag">Só com hashtag</option><option value="frase">Só com a frase</option></select>
+    <input id="busca" type="search" placeholder="Buscar por @, nome ou texto" aria-label="Buscar">
+  </div>
+
+  <div class="kpis">
+    <div class="cartao kpi"><div class="nome">Posts</div><div class="valor" id="k-posts">–</div><div class="delta" id="d-posts"></div></div>
+    <div class="cartao kpi"><div class="nome">Pessoas</div><div class="valor" id="k-autores">–</div><div class="delta">contas únicas</div></div>
+    <div class="cartao kpi"><div class="nome">Vídeos</div><div class="valor" id="k-videos">–</div><div class="delta" id="d-videos"></div></div>
+    <div class="cartao kpi"><div class="nome">Visualizações</div><div class="valor" id="k-views">–</div><div class="delta">onde a rede informa</div></div>
+    <div class="cartao kpi"><div class="nome">Engajamento</div><div class="valor" id="k-eng">–</div><div class="delta">curtidas, comentários, compart.</div></div>
+  </div>
+
+  <div class="redes" id="redes"></div>
+
+  <section class="cartao">
+    <h2>Posts por hora (horário de Brasília)</h2>
+    <div id="grafico"></div>
+    <div class="legenda"><span><i style="background:var(--x)"></i>X</span><span><i style="background:var(--tiktok)"></i>TikTok</span><span><i style="background:var(--instagram)"></i>Instagram</span></div>
+  </section>
+
+  <div class="duas">
+    <section class="cartao"><h2>Posts que mais engajaram</h2><div class="rolagem" id="top"></div></section>
+    <section class="cartao"><h2>Quem mais puxou</h2><div class="rolagem" id="autores"></div></section>
+  </div>
+
+  <section class="cartao"><h2>Todos os posts (mais recentes primeiro)</h2><div class="rolagem" id="lista"></div></section>
+</main>
+
+<script>
+const nomes = { x: "X", tiktok: "TikTok", instagram: "Instagram" };
+const cobertura = {
+  x: "Hashtag e frase. Cobertura completa.",
+  tiktok: "Só quem usa a hashtag.",
+  instagram: "Só quem usa a hashtag na legenda. Stories e posts só com a frase ficam de fora.",
+};
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (n == null ? "–" : new Intl.NumberFormat("pt-BR", { notation: n >= 100000 ? "compact" : "standard" }).format(n));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const urlSegura = (u) => (/^https?:\/\//i.test(u ?? "") ? u : "#");
+const quando = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
+const eng = (p) => (p.curtidas ?? 0) + (p.comentarios ?? 0) + (p.compartilhamentos ?? 0);
+
+function consulta() {
+  const q = new URLSearchParams();
+  for (const id of ["rede", "video", "match", "busca"]) if ($(id).value) q.set(id, $(id).value);
+  return q.toString();
+}
+
+function tabelaPosts(posts) {
+  if (!posts.length) return '<div class="vazio">Ainda não há posts com esses filtros.</div>';
+  const linhas = posts.map((p) => `<tr>
+    <td>${quando(p.publicado)}</td>
+    <td><span class="etiqueta">${nomes[p.rede]}</span></td>
+    <td><a href="${esc(urlSegura(p.url))}" target="_blank" rel="noopener noreferrer">@${esc(p.autor)}</a></td>
+    <td>${p.video ? "Vídeo" : ""}</td>
+    <td><span class="etiqueta">${p.match === "frase" ? "frase" : "#"}</span></td>
+    <td class="num">${fmt(p.views)}</td><td class="num">${fmt(eng(p))}</td>
+    <td class="texto" title="${esc(p.texto)}">${esc(p.texto)}</td></tr>`).join("");
+  return `<table><thead><tr><th>Quando</th><th>Rede</th><th>Quem</th><th>Tipo</th><th>Termo</th><th class="num">Views</th><th class="num">Engaj.</th><th>Texto</th></tr></thead><tbody>${linhas}</tbody></table>`;
+}
+
+function tabelaTop(posts) {
+  if (!posts.length) return '<div class="vazio">Sem dados ainda.</div>';
+  return `<table><tbody>${posts.map((p) => `<tr><td><span class="etiqueta">${nomes[p.rede]}</span></td><td><a href="${esc(urlSegura(p.url))}" target="_blank" rel="noopener noreferrer">@${esc(p.autor)}</a></td><td class="num">${fmt(eng(p))}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function tabelaAutores(autores) {
+  if (!autores.length) return '<div class="vazio">Sem dados ainda.</div>';
+  return `<table><thead><tr><th>Conta</th><th class="num">Posts</th><th class="num">Engaj.</th></tr></thead><tbody>${autores.map((a) => `<tr><td><span class="etiqueta">${nomes[a.rede]}</span> @${esc(a.autor)}</td><td class="num">${a.posts}</td><td class="num">${fmt(a.engajamento)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function grafico(linha) {
+  if (!linha.length) return '<div class="vazio">O gráfico aparece quando chegarem os primeiros posts.</div>';
+  const dados = linha.slice(-72);
+  const L = 720, A = 180, mx = 28, my = 14;
+  const max = Math.max(1, ...dados.map((d) => d.total));
+  const larg = (L - mx) / dados.length;
+  const barras = dados.map((d, i) => {
+    let y = A - my;
+    const x = mx + i * larg + 1;
+    return ["x", "tiktok", "instagram"].map((r) => {
+      const h = (d[r] / max) * (A - 2 * my);
+      y -= h;
+      return h > 0 ? `<rect x="${x}" y="${y}" width="${Math.max(larg - 2, 1)}" height="${h}" fill="var(--${r})"><title>${d.hora.slice(5).replace("T", " ")}h · ${nomes[r]}: ${d[r]}</title></rect>` : "";
+    }).join("");
+  }).join("");
+  const rot = dados.filter((_, i) => i % Math.ceil(dados.length / 8) === 0).map((d) => {
+    const i = dados.indexOf(d);
+    return `<text x="${mx + i * larg}" y="${A - 1}" font-size="10" fill="var(--suave)">${d.hora.slice(8, 10)}/${d.hora.slice(5, 7)} ${d.hora.slice(11)}h</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${L} ${A}" width="100%" role="img" aria-label="Posts por hora"><line x1="${mx}" x2="${L}" y1="${A - my}" y2="${A - my}" stroke="var(--linha)"/><text x="0" y="${my + 4}" font-size="10" fill="var(--suave)">${max}</text>${barras}${rot}</svg>`;
+}
+
+function cartaoRede(r, dado, cob) {
+  const ul = cob.ultima;
+  const status = !ul ? "" : ul.status;
+  const info = !ul ? "Ainda sem coleta." : ul.status === "ok" ? `Coletado ${quando(ul.em)}` : ul.status === "limite" ? "Teto diário atingido" : `Falhou ${quando(ul.em)}`;
+  return `<div class="cartao rede"><h3><span class="ponto ${status}"></span>${nomes[r]}</h3>
+    <div><strong>${fmt(dado.posts)}</strong> posts · <strong>${fmt(dado.autores)}</strong> pessoas · <strong>${fmt(dado.videos)}</strong> vídeos</div>
+    <div class="numeros">${info}</div><div class="cob">${cobertura[r]}</div></div>`;
+}
+
+async function carregar() {
+  const r = await fetch("/api/resumo?" + consulta());
+  if (!r.ok) return;
+  const d = await r.json();
+  $("termos").textContent = `Desde ${quando(d.estado.inicio)} · ${d.estado.termos.hashtags.map((h) => "#" + h).join(", ")} · “${d.estado.termos.frases.join("”, “")}”`;
+  $("k-posts").textContent = fmt(d.totais.posts);
+  $("k-autores").textContent = fmt(d.totais.autores);
+  $("k-videos").textContent = fmt(d.totais.videos);
+  $("k-views").textContent = fmt(d.totais.views);
+  $("k-eng").textContent = fmt(d.totais.engajamento);
+  const dif = d.ultimaHora - d.horaAnterior;
+  $("d-posts").textContent = `${d.ultimaHora} na última hora (${dif >= 0 ? "+" : ""}${dif} vs. hora anterior)`;
+  $("d-videos").textContent = "posts com vídeo";
+  $("redes").innerHTML = ["x", "tiktok", "instagram"].map((n) => cartaoRede(n, d.porRede[n], d.cobertura[n])).join("");
+  $("grafico").innerHTML = grafico(d.linha);
+  $("top").innerHTML = tabelaTop(d.top);
+  $("autores").innerHTML = tabelaAutores(d.autores);
+  $("lista").innerHTML = tabelaPosts(d.posts);
+  $("csv").href = "/api/posts.csv?" + consulta();
+  $("atualizar").disabled = d.estado.rodando || !d.estado.temToken;
+  $("atualizar").textContent = d.estado.rodando ? "Coletando…" : "Atualizar agora";
+  $("estado").textContent = d.estado.proximaColeta ? `Próxima coleta automática às ${quando(new Date(d.estado.proximaColeta).toISOString())}.` : "";
+  const aviso = $("aviso");
+  aviso.style.display = d.estado.temToken ? "none" : "block";
+  aviso.textContent = "O token do Apify ainda não foi configurado no servidor. O painel está vazio até isso ser feito.";
+}
+
+$("atualizar").addEventListener("click", async () => {
+  $("atualizar").disabled = true;
+  await fetch("/api/coletar", { method: "POST" });
+  setTimeout(carregar, 1500);
+});
+for (const id of ["rede", "video", "match"]) $(id).addEventListener("change", carregar);
+let espera;
+$("busca").addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(carregar, 300); });
+carregar();
+setInterval(carregar, 60000);
+</script>
+</body>
+</html>
