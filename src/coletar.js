@@ -15,7 +15,9 @@ async function rodarAtor(ator, entrada) {
     signal: AbortSignal.timeout(290_000),
   });
   if (!resposta.ok) {
-    throw new Error(`Apify ${ator}: HTTP ${resposta.status}`);
+    const corpo = await resposta.json().catch(() => null);
+    const motivo = corpo?.error?.message ?? corpo?.error?.type ?? "";
+    throw new Error(`Apify ${ator}: HTTP ${resposta.status} ${motivo}`.trim());
   }
   return resposta.json();
 }
