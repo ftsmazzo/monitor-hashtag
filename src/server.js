@@ -6,10 +6,13 @@ import { abrirLoja } from "./store.js";
 import { estaRodando, rodarColeta } from "./coletar.js";
 import { filtrar, paraCsv, resumo } from "./stats.js";
 
-if (config.producao && !config.senha) {
-  console.error("PAINEL_SENHA é obrigatória em produção.");
+if (config.producao && !config.senha && !config.acessoLivre) {
+  console.error("Defina PAINEL_SENHA ou ACESSO_LIVRE=1 em produção.");
   process.exit(1);
 }
+
+const INTERVALO_MANUAL_MS = 10 * 60_000;
+let ultimaManual = 0;
 
 const loja = await abrirLoja();
 const pagina = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
@@ -29,7 +32,12 @@ function autorizado(req) {
 }
 
 const enviar = (res, status, corpo, tipo = "application/json; charset=utf-8", extra = {}) => {
-  res.writeHead(status, { "content-type": tipo, "cache-control": "no-store", ...extra });
+  res.writeHead(status, {
+    "content-type": tipo,
+    "cache-control": "no-store",
+    "x-robots-tag": "noindex, nofollow",
+    ...extra,
+  });
   res.end(typeof corpo === "string" ? corpo : JSON.stringify(corpo));
 };
 
@@ -89,6 +97,10 @@ const servidor = createServer(async (req, res) => {
     if (url.pathname === "/api/coletar" && req.method === "POST") {
       if (estaRodando()) return enviar(res, 409, { erro: "Já existe uma coleta em andamento" });
       if (!config.apifyToken) return enviar(res, 400, { erro: "APIFY_TOKEN não configurado" });
+      if (Date.now() - ultimaManual < INTERVALO_MANUAL_MS) {
+        return enviar(res, 429, { erro: "Aguarde alguns minutos entre coletas manuais" });
+      }
+      ultimaManual = Date.now();
       void coletarEmSegundoPlano();
       return enviar(res, 202, { ok: true });
     }

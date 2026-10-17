@@ -15,6 +15,7 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   usuario: process.env.PAINEL_USUARIO ?? "campanha",
   senha: process.env.PAINEL_SENHA ?? "",
+  acessoLivre: process.env.ACESSO_LIVRE === "1",
   producao: process.env.NODE_ENV === "production",
   inicio: new Date(process.env.INICIO ?? "2026-10-16T00:00:00-03:00"),
   hashtags: lista(process.env.HASHTAGS, "lulaquebrouobrasil,lulauqebrouobrasil").map((h) =>
